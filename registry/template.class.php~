@@ -1,0 +1,93 @@
+<?php
+
+class Template {
+  private $page;
+
+  public function __construct( Registry $registry )
+  {
+    $this->registry = $registry;
+    include (FRAMEWORK_PATH . '/register/page.class.php');
+    $this->page = new Page($registry);
+  }
+
+  public function addTemplateBit($tag, $bit)
+  {
+    if(strpos(bit, 'views/' ) === false) {
+      $bit = 'views/' . $this->registry->getSetting('view') . '/templates/' . $bit;
+    }
+    $this->page->addTemplateBit($tag, $bit);
+  }
+
+  public function replaceBits()
+  {
+    $bits = $this->page->getBits();
+    foreach ($bits as $tag => $template) {
+      $templateContent = file_get_contents( $template );
+      $newContent = str_replace('{' . $tag . '}',
+                      $templateContent,
+                      $this->page->getContent()
+                    );
+      $this->page->setContent($newContent);
+    }
+  }
+
+  public function replaceTags( $pp = false )
+  {
+    if(!$pp) {
+      $tags = $this->page->getTags();
+    } else {
+      $tags = $this->page->getPPTags();
+    }
+
+    foreach( $tags as $tag => $data ) {
+      if(is_array($data)) {
+        if($data[0] == 'SQL') {
+          $this->replaceDBTags($tag, $data[1]);
+        } else if($data[0] == 'DATA') {
+          $this->replaceDataTags($tag, $data[1]);
+        }
+      } else {
+        $newContent = str_replace( '{' . $tag . '}',
+                        $data,
+                        $this->page->getContent()
+                      );
+        $this->page->setContent($newContent);
+      }
+    }
+  }
+
+  //Replace content on the page with data from the database
+  public function replaceDBTags($tag, $cacheId)
+  {
+    $block = '';
+    $blockOld = $this->page->getBlock($tag);
+    $apd = $this->page->getAdditionalParsingData();
+    $apdkeys = array_keys($apd);
+    // foreach record relating to the query...
+    while ($tags = $this->registry->getObject('db')->resultsFromCache( $cacheId ))  {
+      $blockNew = $blockOld;
+      //check for APD tags.
+      if(in_array( $tag, $apdkeys)) {
+        foreach($tags as $ntag => $data) {
+          $blockNew = str_replace("{" . $ntag . "}", $data, $blockNew);
+          // do we need to do extra parsing on this tag?
+          if( array_key_exists($ntag, $apd[$tag])) {
+             $extra = $apd[$tag][$ntag];
+             if( $data == $extra['condition'] ) {
+               $blockNew = str_replace("{" . $extra['tag'] . "}", $extra['data'], $blockNew);
+             } else {
+               $blockNew = str_replace("{" . $extra['tag'] . "}", '', $blockNew);
+             }
+          } 
+        } 
+      } else {
+            //We don't need to do extra parsing on this tag
+          foreach( $tags as $ntag => $data) {
+            $blockNew = str_replace("{" . $ntag . "}", $data, $blockNew);
+          }
+
+      }
+
+    }
+  }
+}

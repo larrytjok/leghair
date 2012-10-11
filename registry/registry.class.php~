@@ -1,0 +1,15 @@
+<?php
+
+class Registry {
+
+      private $objects;
+
+      private $settings;
+
+      public function __construct() {
+      }
+
+}
+
+
+?>
